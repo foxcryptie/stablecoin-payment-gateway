@@ -12,6 +12,7 @@ jobs:
           version: v1.8.5
       - name: Install pinned dependencies
         run: |
+          mkdir -p lib
           git clone --quiet --depth 1 --branch v5.6.1 https://github.com/OpenZeppelin/openzeppelin-contracts.git lib/openzeppelin-contracts
           git clone --quiet --depth 1 --branch v1.17.0 https://github.com/foundry-rs/forge-std.git lib/forge-std
       - run: forge build
