@@ -46,6 +46,7 @@ CI runs the same commands. The mock token is under `test/`; it has an unrestrict
 - No upgrade or emergency rescue path exists. Unsupported tokens or accidental transfers can leave funds inaccessible.
 
 Read [THREAT_MODEL.md](THREAT_MODEL.md) before discussing deployment.
+Use [STUDY_GUIDE.md](STUDY_GUIDE.md) to walk through the design and make your own change before publication.
 
 ## Study questions
 
