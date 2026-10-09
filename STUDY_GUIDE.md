@@ -1,6 +1,6 @@
 # Study guide: payment gateway
 
-Work through this before making the repository public. Read the contract first, then the tests, then the threat model.
+Read the contract first, then the tests, then the threat model. Use this guide to check whether you can explain the implementation and its limits.
 
 ## 1. Trace one payment
 
@@ -24,8 +24,8 @@ Explain why `payInvoice` checks the token balance change. Find each external tok
 
 ## 4. Make a change yourself
 
-Add an `Expired` or `Cancelled` state for an unpaid invoice, with a merchant-only cancel function and a test that proves it cannot be paid afterward. Run the CI and review the diff.
+Add an `Expired` state for an unpaid invoice and a function callable by anyone after the payment deadline. Test that it cannot expire before the deadline or after payment. Run the CI and review the diff.
 
 ## 5. Readiness check
 
-Before publishing, explain the state diagram, accounting identity, fee rounding, exact-token assumption, and the merchant's refund power without reading the source. Do not describe this as a security audit or production payment processor.
+Explain the state diagram, accounting identity, fee rounding, exact-token assumption, and the merchant's refund power without reading the source. Do not describe this as a security audit or production payment processor.

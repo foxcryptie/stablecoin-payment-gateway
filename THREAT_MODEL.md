@@ -16,6 +16,7 @@ The payer trusts the merchant to handle refunds fairly. This is not trustless es
 | Risk | Control or residual risk |
 | --- | --- |
 | Duplicate payment | Invoice state changes from Open before transfer; further payments revert. |
+| Payment of a cancelled invoice | Cancellation changes Open to Cancelled; the payer's payment call then reverts. |
 | Cross-merchant invoice collision | IDs are scoped by merchant address. |
 | Reentrant token callback | Transfer-bearing functions use `nonReentrant` and update state before external calls. |
 | Fee-on-transfer token | Payment checks the exact received amount and reverts on mismatch. |

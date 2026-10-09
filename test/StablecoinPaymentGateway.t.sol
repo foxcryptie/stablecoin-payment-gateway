@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {StablecoinPaymentGateway} from "../src/StablecoinPaymentGateway.sol";
 import {MockUSDC} from "./MockUSDC.sol";
+import {FeeOnTransferToken} from "./FeeOnTransferToken.sol";
 
 contract StablecoinPaymentGatewayTest is Test {
     MockUSDC internal usdc;
@@ -56,6 +57,34 @@ contract StablecoinPaymentGatewayTest is Test {
         vm.prank(payer);
         vm.expectRevert(StablecoinPaymentGateway.InvoiceExpired.selector);
         gateway.payInvoice(merchant, INVOICE);
+    }
+
+    function testMerchantCanCancelOnlyUnpaidInvoice() public {
+        vm.prank(merchant);
+        gateway.cancelInvoice(INVOICE);
+        assertEq(
+            uint256(gateway.getInvoice(merchant, INVOICE).status),
+            uint256(StablecoinPaymentGateway.Status.Cancelled)
+        );
+        vm.prank(payer);
+        vm.expectRevert(StablecoinPaymentGateway.InvalidStatus.selector);
+        gateway.payInvoice(merchant, INVOICE);
+        vm.prank(merchant);
+        vm.expectRevert(StablecoinPaymentGateway.InvoiceAlreadyExists.selector);
+        gateway.createInvoice(INVOICE, payer, AMOUNT, uint64(block.timestamp + 1 days));
+    }
+
+    function testPaidInvoiceCannotBeCancelled() public {
+        _pay(INVOICE);
+        vm.prank(merchant);
+        vm.expectRevert(StablecoinPaymentGateway.InvalidStatus.selector);
+        gateway.cancelInvoice(INVOICE);
+    }
+
+    function testOtherMerchantCannotCancelInvoice() public {
+        vm.prank(merchant2);
+        vm.expectRevert(StablecoinPaymentGateway.InvalidStatus.selector);
+        gateway.cancelInvoice(INVOICE);
     }
 
     function testIdsAreScopedToMerchant() public {
@@ -121,6 +150,53 @@ contract StablecoinPaymentGatewayTest is Test {
         vm.prank(outsider);
         vm.expectRevert(StablecoinPaymentGateway.NotFeeRecipient.selector);
         gateway.withdrawFees(1, outsider);
+    }
+
+    function testFeeOnTransferTokenPaymentRevertsWithoutChangingState() public {
+        FeeOnTransferToken taxed = new FeeOnTransferToken();
+        StablecoinPaymentGateway taxedGateway =
+            new StablecoinPaymentGateway(IERC20(address(taxed)), feeRecipient, 250);
+        taxed.mint(payer, AMOUNT);
+        vm.prank(merchant);
+        taxedGateway.createInvoice(INVOICE, payer, AMOUNT, uint64(block.timestamp + 1 days));
+        vm.startPrank(payer);
+        taxed.approve(address(taxedGateway), AMOUNT);
+        vm.expectRevert(StablecoinPaymentGateway.UnsupportedTokenBehavior.selector);
+        taxedGateway.payInvoice(merchant, INVOICE);
+        vm.stopPrank();
+        assertEq(taxed.balanceOf(payer), AMOUNT);
+        assertEq(taxed.balanceOf(address(taxedGateway)), 0);
+        assertEq(taxedGateway.totalPending(), 0);
+        assertEq(
+            uint256(taxedGateway.getInvoice(merchant, INVOICE).status),
+            uint256(StablecoinPaymentGateway.Status.Open)
+        );
+    }
+
+    function testAccountingAcrossSettleRefundAndWithdraw() public {
+        bytes32 secondId = keccak256("second");
+        _create(secondId, 50_000_000);
+        _pay(INVOICE);
+        _pay(secondId);
+        assertEq(gateway.totalPending(), 150_000_000);
+        assertEq(usdc.balanceOf(address(gateway)), 150_000_000);
+
+        vm.prank(merchant);
+        gateway.settleInvoice(INVOICE);
+        vm.prank(merchant);
+        gateway.refundInvoice(secondId);
+        assertEq(gateway.totalPending(), 0);
+        assertEq(
+            usdc.balanceOf(address(gateway)),
+            gateway.totalMerchantCredit() + gateway.accruedFees()
+        );
+
+        vm.prank(merchant);
+        gateway.withdrawMerchant(50_000_000, merchant);
+        assertEq(
+            usdc.balanceOf(address(gateway)),
+            gateway.totalMerchantCredit() + gateway.accruedFees()
+        );
     }
 
     function testFuzzAccountingAfterSettlement(uint96 rawAmount) public {

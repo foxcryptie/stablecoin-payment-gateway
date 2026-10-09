@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /// @notice Single-token invoice payments. A merchant can settle or refund a paid invoice.
-/// @dev Learning implementation. Only use with a conventional, non-rebasing ERC-20 token.
+/// @dev Reference implementation for a conventional, non-rebasing ERC-20 token.
 contract StablecoinPaymentGateway is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -16,7 +16,8 @@ contract StablecoinPaymentGateway is ReentrancyGuard {
         Open,
         Paid,
         Settled,
-        Refunded
+        Refunded,
+        Cancelled
     }
 
     struct Invoice {
@@ -59,6 +60,7 @@ contract StablecoinPaymentGateway is ReentrancyGuard {
     event InvoicePaid(address indexed merchant, bytes32 indexed invoiceId, address indexed payer, uint256 amount);
     event InvoiceSettled(address indexed merchant, bytes32 indexed invoiceId, uint256 merchantAmount, uint256 fee);
     event InvoiceRefunded(address indexed merchant, bytes32 indexed invoiceId, address indexed payer, uint256 amount);
+    event InvoiceCancelled(address indexed merchant, bytes32 indexed invoiceId);
     event MerchantWithdrawal(address indexed merchant, address indexed to, uint256 amount);
     event FeeWithdrawal(address indexed to, uint256 amount);
 
@@ -84,6 +86,14 @@ contract StablecoinPaymentGateway is ReentrancyGuard {
         if (invoice.status != Status.Unset) revert InvoiceAlreadyExists();
         _invoices[msg.sender][invoiceId] = Invoice(payer, amount, deadline, Status.Open);
         emit InvoiceCreated(msg.sender, invoiceId, payer, amount, deadline);
+    }
+
+    /// @notice Merchant cancels an unpaid invoice; its ID cannot be reused.
+    function cancelInvoice(bytes32 invoiceId) external {
+        Invoice storage invoice = _invoices[msg.sender][invoiceId];
+        if (invoice.status != Status.Open) revert InvalidStatus();
+        invoice.status = Status.Cancelled;
+        emit InvoiceCancelled(msg.sender, invoiceId);
     }
 
     function payInvoice(address merchant, bytes32 invoiceId) external nonReentrant {

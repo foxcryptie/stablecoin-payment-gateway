@@ -1,14 +1,16 @@
 # Stablecoin Payment Gateway
 
-A single-token, on-chain invoice payment example using a six-decimal mock stablecoin in tests. Each merchant creates invoices with its own IDs. The named payer pays once; the merchant then either settles the payment or refunds it. Settlement allocates the merchant amount and protocol fee to separate withdrawable balances.
+[![Foundry CI](https://github.com/foxcryptie/stablecoin-payment-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/foxcryptie/stablecoin-payment-gateway/actions/workflows/ci.yml)
 
-This is a study project. It is not audited, and it must not hold real funds.
+A single-token, on-chain invoice payment reference using a six-decimal mock stablecoin in tests. Each merchant creates invoices with its own IDs. The named payer pays once; the merchant then either settles the payment or refunds it. Settlement allocates the merchant amount and protocol fee to separate withdrawable balances.
+
+This is a reference implementation, not an audited payment processor. Do not use it with real funds.
 
 ## Payment flow
 
-`Open -> Paid -> Settled` or `Open -> Paid -> Refunded`.
+`Open -> Paid -> Settled`, `Open -> Paid -> Refunded`, or `Open -> Cancelled`.
 
-An invoice expires for **payment** at its deadline. It does not automatically refund or expire after payment. Only the merchant can choose settlement or refund. A settled invoice cannot be refunded through this contract.
+The merchant may cancel only an unpaid invoice. An invoice expires for **payment** at its deadline. It does not automatically refund or expire after payment. Only the merchant can choose settlement or refund. A settled invoice cannot be refunded through this contract.
 
 The token, fee recipient, and fee rate are immutable. The fee is charged on settlement and rounded down to the token's smallest unit. IDs are unique per merchant, not globally.
 
@@ -39,6 +41,7 @@ CI runs the same commands. The mock token is under `test/`; it has an unrestrict
 ## Design and security limits
 
 - This is a **payment gateway**, not an escrow: the merchant controls settlement and refunds. The payer cannot demand a refund.
+- Cancellation applies only before payment; it cannot move or return tokens.
 - No chargeback, dispute process, timeout after payment, or merchant identity verification exists.
 - A token can freeze, blacklist, pause, upgrade, or change transfer behavior outside this contract. The implementation is intended for a conventional, non-rebasing ERC-20 with exact transfers. It rejects an unexpected received amount on payment.
 - Invoices and payer addresses are public on-chain.
@@ -46,7 +49,7 @@ CI runs the same commands. The mock token is under `test/`; it has an unrestrict
 - No upgrade or emergency rescue path exists. Unsupported tokens or accidental transfers can leave funds inaccessible.
 
 Read [THREAT_MODEL.md](THREAT_MODEL.md) before discussing deployment.
-Use [STUDY_GUIDE.md](STUDY_GUIDE.md) to walk through the design and make your own change before publication.
+Use [STUDY_GUIDE.md](STUDY_GUIDE.md) to walk through the design and its tradeoffs.
 
 ## Study questions
 
