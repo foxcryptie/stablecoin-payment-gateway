@@ -2,31 +2,25 @@
 
 [![Foundry CI](https://github.com/foxcryptie/stablecoin-payment-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/foxcryptie/stablecoin-payment-gateway/actions/workflows/ci.yml)
 
-A single-token, on-chain invoice payment reference using a six-decimal mock stablecoin in tests. Each merchant creates invoices with its own IDs. The named payer pays once; the merchant then either settles the payment or refunds it. Settlement allocates the merchant amount and protocol fee to separate withdrawable balances.
+A small invoice contract for one ERC-20 token. A merchant creates an invoice for a named payer. The payer can pay it once; the merchant then settles it or sends the payment back. Invoice IDs belong to the merchant that created them, so two merchants can use the same ID.
 
-This is a reference implementation, not an audited payment processor. Do not use it with real funds.
+## Follow one payment
 
-## Payment flow
+The tests use a six-decimal mock token. With a 100 mUSDC invoice and a 2.5% protocol fee:
 
-`Open -> Paid -> Settled`, `Open -> Paid -> Refunded`, or `Open -> Cancelled`.
+| Step | Pending | Merchant credit | Fee credit |
+| --- | ---: | ---: | ---: |
+| Invoice created | 0 | 0 | 0 |
+| Payer sends 100 | 100 | 0 | 0 |
+| Merchant settles | 0 | 97.5 | 2.5 |
 
-The merchant may cancel only an unpaid invoice. An invoice expires for **payment** at its deadline. It does not automatically refund or expire after payment. Only the merchant can choose settlement or refund. A settled invoice cannot be refunded through this contract.
+The merchant and fee recipient withdraw their credits separately. Before settlement, the merchant can instead refund the full 100 to the payer. The payment deadline stops *new payments*; it does not trigger a refund after payment. There is no payer-enforced refund path. This contract is therefore a merchant-controlled gateway, not an escrow.
 
-The token, fee recipient, and fee rate are immutable. The fee is charged on settlement and rounded down to the token's smallest unit. IDs are unique per merchant, not globally.
+The gateway checks that it received exactly the invoiced amount. It is built for a conventional, non-rebasing token; the fee-on-transfer test shows a taxed payment reverting. The accounting tests check that the token balance covers pending payments, merchant credits, and accrued fees.
 
-## Accounting
+## Run the tests
 
-For a conventional ERC-20 token, the intended accounting identity is:
-
-```text
-gateway token balance >= totalPending + totalMerchantCredit + accruedFees
-```
-
-The excess can be a direct token donation. A test checks equality in the absence of donations. Pending funds remain reserved until settlement or refund. Merchant and fee withdrawals reduce their respective credits before transferring tokens.
-
-## Run
-
-Requirements: Git and Foundry v1.8.5.
+Install [Foundry](https://book.getfoundry.sh/getting-started/installation) and Git, then clone the pinned test dependencies:
 
 ```bash
 mkdir -p lib
@@ -36,25 +30,8 @@ forge build
 forge test -vv
 ```
 
-CI runs the same commands. The mock token is under `test/`; it has an unrestricted mint function and is never suitable for deployment as a real stablecoin.
+Start with [`test/StablecoinPaymentGateway.t.sol`](test/StablecoinPaymentGateway.t.sol). It covers the state transitions, who may act on an invoice, fee splitting, refunds, and balance accounting. [`THREAT_MODEL.md`](THREAT_MODEL.md) records the trust assumptions; [`STUDY_GUIDE.md`](STUDY_GUIDE.md) walks through the numbers.
 
-## Design and security limits
+## Boundaries
 
-- This is a **payment gateway**, not an escrow: the merchant controls settlement and refunds. The payer cannot demand a refund.
-- Cancellation applies only before payment; it cannot move or return tokens.
-- No chargeback, dispute process, timeout after payment, or merchant identity verification exists.
-- A token can freeze, blacklist, pause, upgrade, or change transfer behavior outside this contract. The implementation is intended for a conventional, non-rebasing ERC-20 with exact transfers. It rejects an unexpected received amount on payment.
-- Invoices and payer addresses are public on-chain.
-- Anyone can create invoices for their own merchant address. Apps must display and verify the intended merchant address.
-- No upgrade or emergency rescue path exists. Unsupported tokens or accidental transfers can leave funds inaccessible.
-
-Read [THREAT_MODEL.md](THREAT_MODEL.md) before discussing deployment.
-Use [STUDY_GUIDE.md](STUDY_GUIDE.md) to walk through the design and its tradeoffs.
-
-## Study questions
-
-1. Why is invoice identity the pair `(merchant, invoiceId)`?
-2. Why are funds kept pending before merchant settlement?
-3. Which state updates occur before each token transfer, and why?
-4. What changes would be needed to allow payer-enforced refunds after a deadline?
-5. How would you safely support tokens with fees on transfer, if at all?
+The merchant can settle immediately and the payer cannot force a refund. Token issuers may freeze, pause, or change token behavior. There is no dispute process, emergency withdrawal, upgrade path, or independent audit. The mock token is test-only. Do not deploy this example with real funds.
